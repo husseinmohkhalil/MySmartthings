@@ -26,10 +26,10 @@ definition(
 
 preferences {
 	 section("Which Virtual Dimmer You are going to use"){
-    input(name: "virtualDimmer", type: "Fibaro Roller Shutter 3", title: "Which switch?", required: true)
+    input(name: "virtualDimmer", type: "capability.switchLevel", title: "Which switch?", required: true)
    }
    section("Which device(s) to control "){
-    input(name: "targets", type: "Fibaro Roller Shutter 3", title: "Target dimmer switch(s)", multiple: true, required: true)
+    input(name: "targets", type: "capability.switchLevel", title: "Target dimmer switch(s)", multiple: true, required: true)
     }
   }
 
@@ -55,15 +55,19 @@ def initialize() {
 
 
 def SwitchOnHandler(evt) {
-    targets.on()
+   	log.debug "Updated with settings: ${evt.value}"
+ targets.on()
 }
 
 def SwitchOffHandler(evt) {
-	targets.off()
+		log.debug "Updated with settings: ${evt.value}"
+targets.off()
 }
 
 def SwitchLevelChangedHandler(evt) {
-      targets.setLevel(level)
+	log.debug "Updated with settings: ${evt.value}"
+
+      targets.setLevel(evt.value)
     }
 
 // TODO: implement event handlers
