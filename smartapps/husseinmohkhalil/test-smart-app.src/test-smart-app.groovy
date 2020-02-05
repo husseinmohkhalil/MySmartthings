@@ -51,10 +51,12 @@ def initialize() {
 
 def makeJSONWeatherRequest() { 
 
-
-	def todatDay = new Date().format( 'dd' ) as int 
+    def todatDay = new Date().format( 'dd' ) as int 
     def todatMonth = new Date().format( 'MM' ) as int 
-    def todatYear = new Date().format( 'yyyy' ) as int 
+    def todatYear = new Date().format( 'yyyy' ) as int
+    def nowDateTime = new Date()
+    log.debug "${nowDateTime}"
+    def newDate = GetParayerDateTime(23,35)
     
   	def params = [
  		   uri: "http://api.aladhan.com/v1/calendar?latitude=47.9568123&longitude=7.7496747&method=2&month=1&year=2020",
@@ -72,24 +74,58 @@ def makeJSONWeatherRequest() {
             assert JsonObject.data[todatDay] instanceof Map
             assert JsonObject.data[todatDay].timings instanceof Map
                         
-            def Fajr = JsonObject.data[todatDay].timings.Fajr.split()[0]
-            def Zohr = JsonObject.data[todatDay].timings.Dhuhr.split()[0]
-            def Asr = JsonObject.data[todatDay].timings.Asr.split()[0]
-            def Maghreb = JsonObject.data[todatDay].timings.Maghrib.split()[0]
-            def Isha = JsonObject.data[todatDay].timings.Isha.split()[0]
+            def FajrTime = JsonObject.data[todatDay].timings.Fajr.split()[0].split(':')
+            def ZohrTime = JsonObject.data[todatDay].timings.Dhuhr.split()[0].split(':')
+            def AsrTime = JsonObject.data[todatDay].timings.Asr.split()[0].split(':')
+            def MaghrebTime = JsonObject.data[todatDay].timings.Maghrib.split()[0].split(':')
+            def IshaTime = JsonObject.data[todatDay].timings.Isha.split()[0].split(':')
             
-            log.debug "Fajr  ${Fajr}"
-            log.debug "Zohr  ${Zohr}"
-            log.debug "Asr  ${Asr}"
-            log.debug "Maghreb  ${Maghreb}"
-            log.debug "Isha  ${Isha}"
+            def Fajr = new Date().copyWith(
+                                            hourOfDay: FajrTime[0] as int,
+                                            minute: FajrTime[01] as int)
             
+            
+            
+           // log.debug "Fajr  ${Fajr}"
             
             
 	}
 	 		} catch (e) {
         log.error "something went wrong: $e"
          }
-      }
+}
 
-// TODO: implement event handlers
+def GetParayerDateTime(prayHour,prayMinutes){
+	
+    def dtFormat = "yyyy-MM-dd'T'HH:mm:ssZ"
+    def dtPrayFormat = dtFormat.replace("HH",prayHour as String).replace("mm",prayMinutes as String)
+	def PrayDateInGermanyTime = new Date().format(dtPrayFormat, TimeZone.getTimeZone('Europe/Berlin'))
+	assert PrayDateInGermanyTime instanceof String
+
+	def PrayDateTimeInUTC = Date.parse(dtFormat , PrayDateInGermanyTime)
+	assert PrayDateTimeInUTC instanceof Date
+        log.debug "${PrayDateTimeInUTC}"
+
+GutSecoundsToNextPrayTime(PrayDateTimeInUTC)
+
+    return PrayDateTimeInUTC 
+  
+}
+
+def GutSecoundsToNextPrayTime(nextPrayTimeInUTC)
+{
+	long timeDiff
+    long unxNow = new Date().getTime()/1000
+    long unxPrayTime = nextPrayTimeInUTC.getTime()/1000
+    
+    timeDiff = Math.abs(unxPrayTime - unxNow)
+    timeDiff = Math.round(timeDiff/60)
+ // def nowDate = new Date()
+  //def duration = groovy.time.TimeCategory.minus(nowDate, nextPrayTimeInUTC)
+          log.debug "${timeDiff}"
+          
+          
+          ///kedah bi7seb lel3adi ... enama lw al fagr lazem ykon al fagr fi al yourm al gedeed
+
+}
+
