@@ -31,13 +31,13 @@ preferences {
 }
 
 def installed() {
-	log.debug "Installed with settings: ${settings}"
+	//log.debug "Installed with settings: ${settings}"
 
 	initialize()
 }
 
 def updated() {
-	log.debug "Updated with settings: ${settings}"
+	//log.debug "Updated with settings: ${settings}"
 
 	unsubscribe()
 	initialize()
@@ -63,24 +63,29 @@ def makeJSONWeatherRequest() {
 
 	try {
     	httpGet(params) { resp ->
-        	resp.headers.each {
-	           //log.debug "${it.name} : ${it.value}"
-    	    }
-        	//log.debug "response contentType: ${resp.contentType}"
-        	//log.debug "response data: ${resp.data}"
-         log.debug "1"
+        	
             def outputJasonData = new groovy.json.JsonOutput().toJson(resp.data)
             def JsonObject    = new groovy.json.JsonSlurper().parseText(outputJasonData) 
-        			log.debug "2"
+        	
             assert JsonObject instanceof Map
-            log.debug "3"
-			assert JsonObject.data instanceof List
-            log.debug "4"
+            assert JsonObject.data instanceof List
             assert JsonObject.data[todatDay] instanceof Map
-            log.debug "5"
             assert JsonObject.data[todatDay].timings instanceof Map
-            log.debug "${JsonObject.data[todatDay].timings}";
-            //log.debug "${deviceString}";
+                        
+            def Fajr = JsonObject.data[todatDay].timings.Fajr.split()[0]
+            def Zohr = JsonObject.data[todatDay].timings.Dhuhr.split()[0]
+            def Asr = JsonObject.data[todatDay].timings.Asr.split()[0]
+            def Maghreb = JsonObject.data[todatDay].timings.Maghrib.split()[0]
+            def Isha = JsonObject.data[todatDay].timings.Isha.split()[0]
+            
+            log.debug "Fajr  ${Fajr}"
+            log.debug "Zohr  ${Zohr}"
+            log.debug "Asr  ${Asr}"
+            log.debug "Maghreb  ${Maghreb}"
+            log.debug "Isha  ${Isha}"
+            
+            
+            
 	}
 	 		} catch (e) {
         log.error "something went wrong: $e"
