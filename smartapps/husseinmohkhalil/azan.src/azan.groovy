@@ -25,124 +25,195 @@ definition(
 
 
 preferences {
-	 section("Which Virtual Dimmer You are going to use"){
-    input(name: "virtualDimmer", type: "capability.switch", title: "Which switch?", required: true)
-   }
-   section("Which device(s) to Play Sound "){
-    input(name: "targets", type: "capability.musicPlayer", title: "Target dimmer switch(s)", multiple: true, required: true)
+    section("Which device(s) to Play Sound ") {
+        input(name: "targets", type: "capability.musicPlayer", title: "Target dimmer switch(s)", multiple: true, required: true)
     }
-  }
+}
 
 def installed() {
-	log.debug "Installed with settings: ${settings}"
+    log.debug "Installed with settings: ${settings}"
 
-	initialize()
+    initialize()
 }
 
 def updated() {
-	log.debug "Updated with settings: ${settings}"
+    log.debug "Updated with settings: ${settings}"
 
-	unsubscribe()
-	initialize()
+    unsubscribe()
+    initialize()
 }
 
 def initialize() {
-   subscribe(virtualDimmer, "switch.on", SwitchOnHandler)
-   
-   
+  
+  GoAzan()
+  
+}
+
+def GoAzan(){
+
+   log.debug " I Started"
+
+  def nextAzanTime = 60 // GetNextAzanTimeInSeconds();
+  runIn(nextAzanTime, PlayAzan);
+   log.debug " I am in between"
+  def nextCalculate = 240 //  nextAzanTime + 120;
+    runIn(nextCalculate, GoAzan);
+   log.debug " I am done"
+
+  
+}
+
+def PlayAzan() {
+   log.debug " Play Azan"
+
+    targets.setTrack("https://www.islamcan.com/audio/adhan/azan12.mp3");
 }
 
 
-def SwitchOnHandler(evt) {
-   	log.debug "Updated with settings: ${evt.value}"
-   targets.setTrack("https://www.islamcan.com/audio/adhan/azan12.mp3");
-}
 
-def GetAzanTimes(){
+def GetNextAzanTimeInSeconds() {
 
-    def todatDay = new Date().format( 'dd' ) as int 
-    def todatMonth = new Date().format( 'MM' ) as int 
-    def todatYear = new Date().format( 'yyyy' ) as int 
-    
-    def nextAzanTimeInSecounds
-    
-  	def params = [
- 		   uri: "http://api.aladhan.com/v1/calendar?latitude=47.9568123&longitude=7.7496747&method=2&month=${todatMonth}&year=${todatYear}",
-  		   path: ""
-				]
+    def todatDay = new Date().format('dd') as int
+    def todatMonth = new Date().format('MM') as int
+    def todatYear = new Date().format('yyyy') as int
 
-	try {
-    	httpGet(params) { resp ->
-        	
-            def outputJasonData = new groovy.json.JsonOutput().toJson(resp.data)
-            def JsonObject    = new groovy.json.JsonSlurper().parseText(outputJasonData) 
-        	
+    def nextAzanTimeInSeconds
+
+    def params = [
+        uri: "http://api.aladhan.com/v1/calendar?latitude=47.9568123&longitude=7.7496747&method=2&month=${todatMonth}&year=${todatYear}",
+        path: ""
+    ]
+
+    try {
+        httpGet(params) {
+            resp ->
+
+                def outputJasonData = new groovy.json.JsonOutput().toJson(resp.data)
+            def JsonObject = new groovy.json.JsonSlurper().parseText(outputJasonData)
+
             assert JsonObject instanceof Map
             assert JsonObject.data instanceof List
             assert JsonObject.data[todatDay] instanceof Map
             assert JsonObject.data[todatDay].timings instanceof Map
-                        
+
+            //get timings [hh][mm] for each pray     
             def FajrTime = JsonObject.data[todatDay].timings.Fajr.split()[0].split(':')
             def ZohrTime = JsonObject.data[todatDay].timings.Dhuhr.split()[0].split(':')
             def AsrTime = JsonObject.data[todatDay].timings.Asr.split()[0].split(':')
             def MaghrebTime = JsonObject.data[todatDay].timings.Maghrib.split()[0].split(':')
             def IshaTime = JsonObject.data[todatDay].timings.Isha.split()[0].split(':')
-            
-            def Fajr = new Date().copyWith(
-                                            hourOfDay: FajrTime[0] as int,
-                                            minute: FajrTime[01] as int)
-            def Zohr = new Date().copyWith(
-                                            hourOfDay: ZohrTime[0] as int,
-                                            minute: ZohrTime[01] as int)
-            def Asr = new Date().copyWith(
-                                            hourOfDay: AsrTime[0] as int,
-                                            minute: AsrTime[01] as int)
-            def Maghreb = new Date().copyWith(
-                                            hourOfDay: MaghrebTime[0] as int,
-                                            minute: MaghrebTime[01] as int)
-            def Isha = new Date().copyWith(
-                                            hourOfDay: IshaTime[0] as int,
-                                            minute: IshaTime[01] as int)
-                                            
-            
-            log.debug "Fajr  ${Fajr}"
-            log.debug "Zohr  ${Zohr}"
-            log.debug "Asr  ${Asr}"
-            log.debug "Maghreb  ${Maghreb}"
-            log.debug "Isha  ${Isha}"
-	}
-	} catch (e) {
+            def TomorrowFajrTime = GetTomorrowFajr(JsonObject.data)
+
+            // get corresponding UTC for each pray           
+            def todayFajrUTC = GetPrayerDateTimeInUTC(FajrTime[0], FajrTime[1])
+            def todayZohrUTC = GetPrayerDateTimeInUTC(ZohrTime[0], ZohrTime[1])
+            def todayAsrUTC = GetPrayerDateTimeInUTC(AsrTime[0], AsrTime[1])
+            def todayMaghrebUTC = GetPrayerDateTimeInUTC(MaghrebTime[0], MaghrebTime[1])
+            def todayIshaUTC = GetPrayerDateTimeInUTC(IshaTime[0], IshaTime[1])
+            def TomorrowFajrUTC = GetPrayerDateTimeInUTC(TomorrowFajrTime[0], TomorrowFajrTime[1], true)
+
+
+            // get seconds remaining for each pray
+            def todayFajrSec = GutSecondsToPrayTime(todayFajrUTC);
+            def tomorrowFajrSec = GutSecondsToPrayTime(TomorrowFajrUTC);
+
+            def nextZohrInSec = GutSecondsToPrayTime(todayZohrUTC);
+            def nextAsrInSec = GutSecondsToPrayTime(todayAsrUTC);
+            def nextMaghrebInSec = GutSecondsToPrayTime(todayMaghrebUTC);
+            def nextIshaInSec = GutSecondsToPrayTime(todayIshaUTC);
+
+            def nextFajrSec = todayFajrSec > 0 ? todayFajrSec : tomorrowFajrSec
+
+
+            // add positive seconds to list and get the minimum value
+
+            def allPrayingTimes = []
+
+            if (nextFajrSec > 0)
+                allPrayingTimes.add(nextFajrSec)
+
+            if (nextZohrInSec > 0)
+                allPrayingTimes.add(nextZohrInSec)
+
+            if (nextAsrInSec > 0)
+                allPrayingTimes.add(nextAsrInSec)
+
+            if (nextMaghrebInSec > 0)
+                allPrayingTimes.add(nextMaghrebInSec)
+
+            if (nextIshaInSec > 0)
+                allPrayingTimes.add(nextIshaInSec)
+
+            def nextPrayTime = allPrayingTimes.min()
+
+            return nextPrayTime
+        }
+    } catch (e) {
         log.error "something went wrong: $e"
     }
 }
 
- 
+def GetTomorrowFajr(todayData) {
 
-def GetParayerDateTimeInUTC(prayHour,prayMinutes){
-	
-    def dtFormat = "yyyy-MM-dd'T'HH:mm:ssZ"
-    def dtPrayFormat = dtFormat.replace("HH",prayHour as String).replace("mm",prayMinutes as String)
-	def PrayDateInGermanyTime = new Date().format(dtPrayFormat, TimeZone.getTimeZone('Europe/Berlin'))
-	assert PrayDateInGermanyTime instanceof String
+    def todatMonth = new Date().format('MM') as int
+    def tomorrowDay = new Date().plus(1).format('dd') as int
+    def tomorrowMonth = new Date().plus(1).format('MM') as int
+    def tomorrowYear = new Date().plus(1).format('yyyy') as int
 
-	def PrayDateTimeInUTC = Date.parse(dtFormat , PrayDateInGermanyTime)
-	assert PrayDateTimeInUTC instanceof Date
-        log.debug "${PrayDateTimeInUTC}"
+    if (todatMonth == tomorrowMonth) {
+        def tomorrowFajrTime = todayData[tomorrowDay].timings.Fajr.split()[0].split(':')
 
-GutSecoundsToNextPrayTime(PrayDateTimeInUTC)
+        return tomorrowFajrTime
+    } else {
+        def params = [
+            uri: "http://api.aladhan.com/v1/calendar?latitude=47.9568123&longitude=7.7496747&method=2&month=${TomorrowMonth}&year=${tomorrowYear}",
+            path: ""
+        ]
 
-    return PrayDateTimeInUTC 
-  
+        try {
+            httpGet(params) {
+                resp ->
+
+                    def outputJasonData = new groovy.json.JsonOutput().toJson(resp.data)
+                def JsonObject = new groovy.json.JsonSlurper().parseText(outputJasonData)
+
+                assert JsonObject instanceof Map
+                assert JsonObject.data instanceof List
+                assert JsonObject.data[tomorrowDay] instanceof Map
+                assert JsonObject.data[tomorrowDay].timings instanceof Map
+
+                def tomorrowFajrTime = JsonObject.data[tomorrowDay].timings.Fajr.split()[0].split(':')
+                return tomorrowFajrTime
+            }
+        } catch (e) {
+            log.error "something went wrong: $e"
+        }
+    }
 }
 
-def GutSecoundsToNextPrayTime(nextPrayTimeInUTC)
-{
-	long timeDiff
-    long unxNow = new Date().getTime()/1000
-    long unxPrayTime = nextPrayTimeInUTC.getTime()/1000
-    
-    timeDiff = Math.abs(unxPrayTime - unxNow)
-    timeDiff = Math.round(timeDiff/60)
-    log.debug "${timeDiff}"
-    
- }
+def GetPrayerDateTimeInUTC(prayHour, prayMinutes, isTomorrowPray = false) {
+
+    def daysToAdd = isTomorrowPray ? 1 : 0
+    def dtFormat = "yyyy-MM-dd'T'HH:mm:ssZ"
+    def dtPrayFormat = dtFormat.replace("HH", prayHour as String).replace("mm", prayMinutes as String)
+    def PrayDateInGermanyTime = new Date().plus(daysToAdd).format(dtPrayFormat, TimeZone.getTimeZone('Europe/Berlin'))
+    assert PrayDateInGermanyTime instanceof String
+
+    def PrayDateTimeInUTC = Date.parse(dtFormat, PrayDateInGermanyTime)
+    assert PrayDateTimeInUTC instanceof Date
+
+
+    return PrayDateTimeInUTC
+
+}
+
+def GutSecondsToPrayTime(PrayTimeInUTC) {
+    long timeDiff
+    long unxNow = new Date().getTime() / 1000
+    long unxPrayTime = PrayTimeInUTC.getTime() / 1000
+
+    timeDiff = unxPrayTime - unxNow
+    //add one min Just in case to override the delay
+    timeDiff += 60
+    return timeDiff
+}
