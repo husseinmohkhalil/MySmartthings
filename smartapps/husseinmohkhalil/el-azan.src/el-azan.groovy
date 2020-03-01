@@ -8,7 +8,7 @@
  *
  *      http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
+ *  Unless required by applicable law or agreed to in writing, software distributed under the License is distributed 
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
@@ -28,27 +28,33 @@ preferences {
 
  section("Fajr") {
   input(name: "FajrTargets", type: "capability.musicPlayer", title: "Target Google Home Speakers or Groups", multiple: true, required: true)
-  input(name: "FajrVolume", type: "number", title: "Target Volume", required: true)
+  input(name: "FajrVolume", type: "number", title: "Target Volume", required: true, defaultValue: "50")
+  input(name: "FajrIsActive", type: "bool", title: "Is Active", required: false, defaultValue: true)
+
  }
 
  section("Zoher") {
   input(name: "ZoherTargets", type: "capability.musicPlayer", title: "Target Google Home Speakers or Groups", multiple: true, required: true)
-  input(name: "ZoherVolume", type: "number", title: "Target Volume", required: true)
+  input(name: "ZoherVolume", type: "number", title: "Target Volume", required: true, defaultValue: "50")
+  input(name: "ZoherIsActive", type: "bool", title: "Is Active", required: false, defaultValue: true)
  }
 
  section("Asr") {
   input(name: "AsrTargets", type: "capability.musicPlayer", title: "Target Google Home Speakers or Groups", multiple: true, required: true)
-  input(name: "AsrVolume", type: "number", title: "Target Volume", required: true)
+  input(name: "AsrVolume", type: "number", title: "Target Volume", required: true, defaultValue: "50")
+  input(name: "AsrIsActive", type: "bool", title: "Is Active", required: false, defaultValue: true)
  }
 
  section("Maghreb") {
   input(name: "MaghrebTargets", type: "capability.musicPlayer", title: "Target Google Home Speakers or Groups", multiple: true, required: true)
-  input(name: "MaghrebVolume", type: "number", title: "Target Volume", required: true)
+  input(name: "MaghrebVolume", type: "number", title: "Target Volume", required: true, defaultValue: "50")
+  input(name: "MaghrebIsActive", type: "bool", title: "Is Active", required: false, defaultValue: true)
  }
 
  section("Isa") {
   input(name: "IsaTargets", type: "capability.musicPlayer", title: "Target Google Home Speakers or Groups", multiple: true, required: true)
-  input(name: "IsaVolume", type: "number", title: "Target Volume", required: true)
+  input(name: "IsaVolume", type: "number", title: "Target Volume", required: true, defaultValue: "50")
+  input(name: "IsaIsActive", type: "bool", title: "Is Active", required: false, defaultValue: true)
  }
 
 }
@@ -83,17 +89,21 @@ def GoAzan() {
   runIn(nextCalculate, GoAzan);
  } catch (e) {
   log.error "something went wrong in Azan Function: $e"
-  GoAzan();
+  //rerun after 10 min
+  runIn(600, GoAzan);
  }
 }
 
 def PlayAzan(data) {
 
  def prayEvent = data.nextPrayEvent
- def targetDevices = GetTargetDeviceByName(prayEvent.name)
+ def targetDevices = GetTargetDeviceByName(prayEvent.Name)
+ def isActive = prayEvent.IsActive
 
- targetDevices.setLevel(prayEvent.Volume)
- targetDevices.setTrack(prayEvent.PlayBackUrl);
+ if (isActive) {
+  targetDevices.setLevel(prayEvent.Volume)
+  targetDevices.setTrack(prayEvent.PlayBackUrl);
+ }
 }
 
 def GetNextPrayEvent() {
@@ -164,19 +174,19 @@ def GetNextPrayEvent() {
    def AllPrayersEvents = []
 
    if (nextFajrSec > 0)
-    AllPrayersEvents.add(GetPrayerTimeObject("Fajr", nextFajrSec, FajrVolume, PlayBackUrl))
+    AllPrayersEvents.add(GetPrayerTimeObject("Fajr", nextFajrSec, FajrVolume, PlayBackUrl, FajrIsActive))
 
    if (nextZohrInSec > 0)
-    AllPrayersEvents.add(GetPrayerTimeObject("Zohr", nextZohrInSec, ZoherVolume, PlayBackUrl))
+    AllPrayersEvents.add(GetPrayerTimeObject("Zohr", nextZohrInSec, ZoherVolume, PlayBackUrl, ZoherIsActive))
 
    if (nextAsrInSec > 0)
-    AllPrayersEvents.add(GetPrayerTimeObject("Asr", nextAsrInSec, AsrVolume, PlayBackUrl))
+    AllPrayersEvents.add(GetPrayerTimeObject("Asr", nextAsrInSec, AsrVolume, PlayBackUrl, AsrIsActive))
 
    if (nextMaghrebInSec > 0)
-    AllPrayersEvents.add(GetPrayerTimeObject("Maghreb", nextMaghrebInSec, MaghrebVolume, PlayBackUrl))
+    AllPrayersEvents.add(GetPrayerTimeObject("Maghreb", nextMaghrebInSec, MaghrebVolume, PlayBackUrl, MaghrebIsActive))
 
    if (nextIshaInSec > 0)
-    AllPrayersEvents.add(GetPrayerTimeObject("Isha", nextIshaInSec, IsaVolume, PlayBackUrl))
+    AllPrayersEvents.add(GetPrayerTimeObject("Isha", nextIshaInSec, IsaVolume, PlayBackUrl, IsaIsActive))
 
 
    def nextPrayEvent = AllPrayersEvents.min {
@@ -193,8 +203,8 @@ def GetNextPrayEvent() {
  }
 }
 
-def GetPrayerTimeObject(name, Time, Volume, PlayBackUrl) {
- def obj = [name: name, Time: Time, Volume: Volume, PlayBackUrl: PlayBackUrl]
+def GetPrayerTimeObject(name, time, volume, playBackUrl, isActive) {
+ def obj = [Name: name, Time: time, Volume: volume, PlayBackUrl: playBackUrl, IsActive: isActive]
 }
 
 def GetTargetDeviceByName(name) {
@@ -275,6 +285,6 @@ def GutSecondsToPrayTime(PrayTimeInUTC) {
  long unxPrayTime = PrayTimeInUTC.getTime() / 1000
 
  timeDiff = unxPrayTime - unxNow
- 
+
  return timeDiff
 }
