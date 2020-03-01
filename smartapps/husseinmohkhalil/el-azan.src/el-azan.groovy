@@ -95,7 +95,7 @@ def GoAzan() {
 }
 
 def PlayAzan(data) {
-
+try {
  def prayEvent = data.nextPrayEvent
  def targetDevices = GetTargetDeviceByName(prayEvent.Name)
  def isActive = prayEvent.IsActive
@@ -103,6 +103,12 @@ def PlayAzan(data) {
  if (isActive) {
   targetDevices.setLevel(prayEvent.Volume)
   targetDevices.setTrack(prayEvent.PlayBackUrl);
+ }
+ 
+  } catch (e) {
+  log.error "something went wrong in playing Azan Function: $e"
+  //rerun after 10 min
+  runIn(600, GoAzan);
  }
 }
 
