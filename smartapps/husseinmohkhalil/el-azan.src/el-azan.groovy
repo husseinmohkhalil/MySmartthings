@@ -89,6 +89,10 @@ def GoAzan() {
   runIn(nextCalculate, GoAzan);
  } catch (e) {
   log.error "something went wrong in Azan Function: $e"
+  sendPush("Exception in GoAzan Function")
+  sendPush("$e")
+
+
   //rerun after 10 min
   runIn(600, GoAzan);
  }
@@ -96,6 +100,8 @@ def GoAzan() {
 
 def PlayAzan(data) {
 try {
+  sendPush("it is Azan Time :) ")
+
  def prayEvent = data.nextPrayEvent
  def targetDevices = GetTargetDeviceByName(prayEvent.Name)
  def isActive = prayEvent.IsActive
@@ -107,6 +113,9 @@ try {
  
   } catch (e) {
   log.error "something went wrong in playing Azan Function: $e"
+  sendPush("Exception in PlayAzan Function")
+  sendPush("$e")
+
   //rerun after 10 min
   runIn(600, GoAzan);
  }
