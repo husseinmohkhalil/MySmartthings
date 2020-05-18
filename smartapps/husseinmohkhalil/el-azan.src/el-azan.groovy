@@ -26,6 +26,8 @@ definition(
 
 preferences {
 
+
+
  section("Fajr") {
   input(name: "FajrTargets", type: "capability.musicPlayer", title: "Target Google Home Speakers or Groups", multiple: true, required: true)
   input(name: "FajrVolume", type: "number", title: "Target Volume", required: true, defaultValue: "50")
@@ -56,6 +58,14 @@ preferences {
   input(name: "IsaVolume", type: "number", title: "Target Volume", required: true, defaultValue: "50")
   input(name: "IsaIsActive", type: "bool", title: "Is Active", required: false, defaultValue: true)
  }
+ 
+  section("Ramadan") {
+   input(name: "IsRamadanModeActive", type: "bool", title: "Is Ramadan", required: true, defaultValue: false)
+   input(name: "EnableKidsMode", type: "bool", title: "Enable Kids Mode", required: true, defaultValue: false)
+   input(name: "KidsIftarHour", type: "number", title: "Kids Iftar Hour", required: false, defaultValue: "")
+   input(name: "KidsIftarTargets", type: "capability.musicPlayer", title: "Target Google Home Speakers or Groups", multiple: true, required: true)
+   input(name: "KidsIftarVolume", type: "number", title: "Target Volume", required: true, defaultValue: "50")
+}
 
 }
 
@@ -81,11 +91,11 @@ def GoAzan() {
   def nextPrayEvent = GetNextPrayEvent();
 
   def nextAzanTime = nextPrayEvent.Time
-  log.info " next Azan Time is after ${nextAzanTime} s "
+  log.info " Azan ${nextPrayEvent.Name} is after ${nextAzanTime} s "
 
   runIn(nextAzanTime, "PlayAzan", [data: [nextPrayEvent: nextPrayEvent, TargetDevice: nextPrayEvent.TargetDevices]])
 
-  def nextCalculate = nextAzanTime + 120;
+  def nextCalculate = nextAzanTime;
   runIn(nextCalculate, GoAzan);
  } catch (e) {
   log.error "something went wrong in Azan Function: $e"
@@ -100,15 +110,18 @@ def GoAzan() {
 
 def PlayAzan(data) {
 try {
-  sendPush("it is Azan Time :) ")
+  
 
  def prayEvent = data.nextPrayEvent
  def targetDevices = GetTargetDeviceByName(prayEvent.Name)
  def isActive = prayEvent.IsActive
 
  if (isActive) {
+  sendPush("it is ${prayEvent.Name} Azan Time :) ")
   targetDevices.setLevel(prayEvent.Volume)
-  targetDevices.setTrack(prayEvent.PlayBackUrl);
+
+  def PlayBackUrl = GetPlayBackUrlBySalahName(prayEvent.Name)
+  targetDevices.setTrack(PlayBackUrl);
  }
  
   } catch (e) {
@@ -124,11 +137,10 @@ try {
 def GetNextPrayEvent() {
 
  def todatDay = new Date().format('dd') as int
+ def todayDayIndex = todatDay -1 as int  // because the index in the array [in the api] starts with 0  so day 27 for example is in the 26th index 
  def todatMonth = new Date().format('MM') as int
  def todatYear = new Date().format('yyyy') as int
  def nextAzanTimeInSeconds
-
- def PlayBackUrl = "https://www.islamcan.com/audio/adhan/azan12.mp3"
 
  def params = [
   uri: "http://api.aladhan.com/v1/calendar?latitude=47.9568123&longitude=7.7496747&method=2&month=${todatMonth}&year=${todatYear}",
@@ -144,15 +156,15 @@ def GetNextPrayEvent() {
 
    assert JsonObject instanceof Map
    assert JsonObject.data instanceof List
-   assert JsonObject.data[todatDay] instanceof Map
-   assert JsonObject.data[todatDay].timings instanceof Map
+   assert JsonObject.data[todayDayIndex] instanceof Map
+   assert JsonObject.data[todayDayIndex].timings instanceof Map
 
    //get timings [hh][mm] for each pray     
-   def FajrTime = JsonObject.data[todatDay].timings.Fajr.split()[0].split(':')
-   def ZohrTime = JsonObject.data[todatDay].timings.Dhuhr.split()[0].split(':')
-   def AsrTime = JsonObject.data[todatDay].timings.Asr.split()[0].split(':')
-   def MaghrebTime = JsonObject.data[todatDay].timings.Maghrib.split()[0].split(':')
-   def IshaTime = JsonObject.data[todatDay].timings.Isha.split()[0].split(':')
+   def FajrTime = JsonObject.data[todayDayIndex].timings.Fajr.split()[0].split(':')
+   def ZohrTime = JsonObject.data[todayDayIndex].timings.Dhuhr.split()[0].split(':')
+   def AsrTime = JsonObject.data[todayDayIndex].timings.Asr.split()[0].split(':')
+   def MaghrebTime = JsonObject.data[todayDayIndex].timings.Maghrib.split()[0].split(':')
+   def IshaTime = JsonObject.data[todayDayIndex].timings.Isha.split()[0].split(':')
    def TomorrowFajrTime = GetTomorrowFajr(JsonObject.data)
 
    log.debug "FajrTime ${FajrTime}"
@@ -170,38 +182,54 @@ def GetNextPrayEvent() {
    def todayMaghrebUTC = GetPrayerDateTimeInUTC(MaghrebTime[0], MaghrebTime[1])
    def todayIshaUTC = GetPrayerDateTimeInUTC(IshaTime[0], IshaTime[1])
    def TomorrowFajrUTC = GetPrayerDateTimeInUTC(TomorrowFajrTime[0], TomorrowFajrTime[1], true)
-
+  
 
    // get seconds remaining for each pray
-   def todayFajrSec = GutSecondsToPrayTime(todayFajrUTC);
-   def tomorrowFajrSec = GutSecondsToPrayTime(TomorrowFajrUTC);
+   def todayFajrSec = GetSecondsToPrayTime(todayFajrUTC);
+   def tomorrowFajrSec = GetSecondsToPrayTime(TomorrowFajrUTC);
 
-   def nextZohrInSec = GutSecondsToPrayTime(todayZohrUTC);
-   def nextAsrInSec = GutSecondsToPrayTime(todayAsrUTC);
-   def nextMaghrebInSec = GutSecondsToPrayTime(todayMaghrebUTC);
-   def nextIshaInSec = GutSecondsToPrayTime(todayIshaUTC);
-
+   def nextZohrInSec = GetSecondsToPrayTime(todayZohrUTC);
+   def nextAsrInSec = GetSecondsToPrayTime(todayAsrUTC);
+   def nextMaghrebInSec = GetSecondsToPrayTime(todayMaghrebUTC);
+   def nextIshaInSec = GetSecondsToPrayTime(todayIshaUTC);
    def nextFajrSec = todayFajrSec > 0 ? todayFajrSec : tomorrowFajrSec
-
+   
+   if(IsRamadanModeActive == true)
+       nextMaghrebInSec = nextMaghrebInSec - 35 
 
    // add positive seconds to list and get the minimum value
 
    def AllPrayersEvents = []
 
    if (nextFajrSec > 0)
-    AllPrayersEvents.add(GetPrayerTimeObject("Fajr", nextFajrSec, FajrVolume, PlayBackUrl, FajrIsActive))
+    AllPrayersEvents.add(GetPrayerTimeObject("Fajr", nextFajrSec, FajrVolume,  FajrIsActive))
 
    if (nextZohrInSec > 0)
-    AllPrayersEvents.add(GetPrayerTimeObject("Zohr", nextZohrInSec, ZoherVolume, PlayBackUrl, ZoherIsActive))
+    AllPrayersEvents.add(GetPrayerTimeObject("Zohr", nextZohrInSec, ZoherVolume,  ZoherIsActive))
 
    if (nextAsrInSec > 0)
-    AllPrayersEvents.add(GetPrayerTimeObject("Asr", nextAsrInSec, AsrVolume, PlayBackUrl, AsrIsActive))
+    AllPrayersEvents.add(GetPrayerTimeObject("Asr", nextAsrInSec, AsrVolume,  AsrIsActive))
 
    if (nextMaghrebInSec > 0)
-    AllPrayersEvents.add(GetPrayerTimeObject("Maghreb", nextMaghrebInSec, MaghrebVolume, PlayBackUrl, MaghrebIsActive))
+    AllPrayersEvents.add(GetPrayerTimeObject("Maghreb", nextMaghrebInSec, MaghrebVolume,  MaghrebIsActive))
 
    if (nextIshaInSec > 0)
-    AllPrayersEvents.add(GetPrayerTimeObject("Isha", nextIshaInSec, IsaVolume, PlayBackUrl, IsaIsActive))
+    AllPrayersEvents.add(GetPrayerTimeObject("Isha", nextIshaInSec, IsaVolume,  IsaIsActive))
+   
+  
+   if(IsRamadanModeActive && EnableKidsMode)
+   {
+      try{
+           def KidsIftarUTC = GetPrayerDateTimeInUTC(KidsIftarHour, "00")
+           def nextKidsIftarInSec = GetSecondsToPrayTime(KidsIftarUTC);
+           if (nextKidsIftarInSec > 0)
+			   AllPrayersEvents.add(GetPrayerTimeObject("KidsIftar", nextKidsIftarInSec, KidsIftarVolume,  true))
+      }
+      catch (e) {
+          sendPush("Kids Configuration not correct")
+          log.error "Kids Configuration not correct"
+      }
+   }
 
 
    def nextPrayEvent = AllPrayersEvents.min {
@@ -218,8 +246,14 @@ def GetNextPrayEvent() {
  }
 }
 
-def GetPrayerTimeObject(name, time, volume, playBackUrl, isActive) {
- def obj = [Name: name, Time: time, Volume: volume, PlayBackUrl: playBackUrl, IsActive: isActive]
+def GetPrayerTimeObject(name, time, volume,  isActive) {
+ def obj = [Name: name, Time: time, Volume: volume, IsActive: isActive]
+}
+
+def GetKidsTimeAzan(){
+   def todayIshaUTC = GetPrayerDateTimeInUTC(IshaTime[0], IshaTime[1])
+   def nextIshaInSec = GetSecondsToPrayTime(todayIshaUTC);
+
 }
 
 def GetTargetDeviceByName(name) {
@@ -238,17 +272,51 @@ def GetTargetDeviceByName(name) {
 
  if (name == "Isha")
   return IsaTargets
+  
+ if (name == "KidsIftar")
+  return KidsIftarTargets
+}
+
+def GetPlayBackUrlBySalahName(name){
+  if (name == "Fajr")
+     return "http://192.168.178.118/assets/Azan_Cairo.mp3"
+
+
+ if (name == "Zohr")
+  return "http://192.168.178.118/assets/Azan_Cairo.mp3"
+
+
+ if (name == "Asr")
+  return "http://192.168.178.118/assets/Azan_Cairo.mp3"
+
+
+ if (name == "Maghreb")
+    if(IsRamadanModeActive == true)
+      return "http://192.168.178.118/assets/Ramadan.maghreb.mp3"
+    else
+      return "http://192.168.178.118/assets/Azan_Cairo.mp3"
+
+
+ if (name == "Isha")
+  return "http://192.168.178.118/assets/Azan_Cairo.mp3"
+  
+  
+ if (name == "KidsIftar")
+  return "http://192.168.178.118/assets/only_madfa3.mp3"
+  
 }
 
 def GetTomorrowFajr(todayData) {
 
  def todatMonth = new Date().format('MM') as int
  def tomorrowDay = new Date().plus(1).format('dd') as int
+ def tomorrowDayIndex = tomorrowDay -1 as int  // because the index in the array [in the api] starts with 0  so day 27 for example is in the 26th index 
+
  def tomorrowMonth = new Date().plus(1).format('MM') as int
  def tomorrowYear = new Date().plus(1).format('yyyy') as int
 
  if (todatMonth == tomorrowMonth) {
-  def tomorrowFajrTime = todayData[tomorrowDay].timings.Fajr.split()[0].split(':')
+  def tomorrowFajrTime = todayData[tomorrowDayIndex].timings.Fajr.split()[0].split(':')
 
   return tomorrowFajrTime
  } else {
@@ -266,10 +334,10 @@ def GetTomorrowFajr(todayData) {
 
     assert JsonObject instanceof Map
     assert JsonObject.data instanceof List
-    assert JsonObject.data[tomorrowDay] instanceof Map
-    assert JsonObject.data[tomorrowDay].timings instanceof Map
+    assert JsonObject.data[tomorrowDayIndex] instanceof Map
+    assert JsonObject.data[tomorrowDayIndex].timings instanceof Map
 
-    def tomorrowFajrTime = JsonObject.data[tomorrowDay].timings.Fajr.split()[0].split(':')
+    def tomorrowFajrTime = JsonObject.data[tomorrowDayIndex].timings.Fajr.split()[0].split(':')
     return tomorrowFajrTime
    }
   } catch (e) {
@@ -294,7 +362,7 @@ def GetPrayerDateTimeInUTC(prayHour, prayMinutes, isTomorrowPray = false) {
 
 }
 
-def GutSecondsToPrayTime(PrayTimeInUTC) {
+def GetSecondsToPrayTime(PrayTimeInUTC) {
  long timeDiff
  long unxNow = new Date().getTime() / 1000
  long unxPrayTime = PrayTimeInUTC.getTime() / 1000
