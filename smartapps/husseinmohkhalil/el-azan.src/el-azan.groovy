@@ -143,7 +143,7 @@ def GetNextPrayEvent() {
  def nextAzanTimeInSeconds
 
  def params = [
-  uri: "http://api.aladhan.com/v1/calendar?latitude=47.9568123&longitude=7.7496747&method=2&month=${todatMonth}&year=${todatYear}",
+  uri: "http://api.aladhan.com/v1/calendar?latitude=47.9568123&longitude=7.7496747&method=12&month=${todatMonth}&year=${todatYear}",
   path: ""
  ]
 
@@ -173,8 +173,7 @@ def GetNextPrayEvent() {
    log.debug "MaghrebTime ${MaghrebTime}"
    log.debug "IshaTime ${IshaTime}"
    log.debug "TomorrowFajrTime ${TomorrowFajrTime}"
-
-
+   
    // get corresponding UTC for each pray           
    def todayFajrUTC = GetPrayerDateTimeInUTC(FajrTime[0], FajrTime[1])
    def todayZohrUTC = GetPrayerDateTimeInUTC(ZohrTime[0], ZohrTime[1])
@@ -194,7 +193,7 @@ def GetNextPrayEvent() {
    def nextIshaInSec = GetSecondsToPrayTime(todayIshaUTC);
    def nextFajrSec = todayFajrSec > 0 ? todayFajrSec : tomorrowFajrSec
    
-   if(IsRamadanModeActive == true)
+   if(IsRamadanModeActive)
        nextMaghrebInSec = nextMaghrebInSec - 35 
 
    // add positive seconds to list and get the minimum value
@@ -235,8 +234,34 @@ def GetNextPrayEvent() {
    def nextPrayEvent = AllPrayersEvents.min {
     it.Time
    }
-
-   log.debug "nextPrayTime ${nextPrayEvent.Time}"
+   
+   
+	def nextAzanDayTime = "";
+    
+    switch(nextPrayEvent.Name){
+    case "Fajr":
+   	 nextAzanDayTime = todayFajrSec > 0 ? FajrTime : TomorrowFajrTime ;
+    break;
+    
+    case "Zohr":
+  	 nextAzanDayTime = ZohrTime;
+     break;
+    
+    case "Asr":
+   	 nextAzanDayTime = AsrTime;
+    break;
+    
+    case "Maghreb":
+  	  nextAzanDayTime = MaghrebTime;
+    break;
+    
+    case "Isha":
+  	  nextAzanDayTime = IshaTime;
+    break;
+    
+    }
+   
+   sendPush("Next Azan is : ${nextPrayEvent.Name} at ${nextAzanDayTime}")
 
 
    return nextPrayEvent
@@ -246,14 +271,15 @@ def GetNextPrayEvent() {
  }
 }
 
+
 def GetPrayerTimeObject(name, time, volume,  isActive) {
  def obj = [Name: name, Time: time, Volume: volume, IsActive: isActive]
 }
 
+
 def GetKidsTimeAzan(){
    def todayIshaUTC = GetPrayerDateTimeInUTC(IshaTime[0], IshaTime[1])
    def nextIshaInSec = GetSecondsToPrayTime(todayIshaUTC);
-
 }
 
 def GetTargetDeviceByName(name) {
@@ -321,7 +347,7 @@ def GetTomorrowFajr(todayData) {
   return tomorrowFajrTime
  } else {
   def params = [
-   uri: "http://api.aladhan.com/v1/calendar?latitude=47.9568123&longitude=7.7496747&method=2&month=${TomorrowMonth}&year=${tomorrowYear}",
+   uri: "http://api.aladhan.com/v1/calendar?latitude=47.9568123&longitude=7.7496747&method=12&month=${TomorrowMonth}&year=${tomorrowYear}",
    path: ""
   ]
 
