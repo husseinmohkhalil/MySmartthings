@@ -304,31 +304,31 @@ def GetTargetDeviceByName(name) {
 }
 
 def GetPlayBackUrlBySalahName(name){
-  if (name == "Fajr")
-     return "http://192.168.178.118/assets/Azan_Cairo.mp3"
+    if (name == "Fajr")
+     return "http://192.168.178.118:1000/azan/azan_cairo1.mp3"
 
 
  if (name == "Zohr")
-  return "http://192.168.178.118/assets/Azan_Cairo.mp3"
+  return "http://192.168.178.118:1000/azan/azan_cairo1.mp3"
 
 
  if (name == "Asr")
-  return "http://192.168.178.118/assets/Azan_Cairo.mp3"
+  return "http://192.168.178.118:1000/azan/azan_cairo1.mp3"
 
 
  if (name == "Maghreb")
     if(IsRamadanModeActive == true)
-      return "http://192.168.178.118/assets/Ramadan.maghreb.mp3"
+      return "http://192.168.178.118:1000/azan/Ramadan_maghreb_complete.mp3"
     else
-      return "http://192.168.178.118/assets/Azan_Cairo.mp3"
+      return "http://192.168.178.118:1000/azan/azan_cairo1.mp3"
 
 
  if (name == "Isha")
-  return "http://192.168.178.118/assets/Azan_Cairo.mp3"
+  return "http://192.168.178.118:1000/azan/azan_cairo1.mp3"
   
   
  if (name == "KidsIftar")
-  return "http://192.168.178.118/assets/only_madfa3.mp3"
+  return "http://192.168.178.118:1000/azan/madfa3_only.mp3"
   
 }
 
