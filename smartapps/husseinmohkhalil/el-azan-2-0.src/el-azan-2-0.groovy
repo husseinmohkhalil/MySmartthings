@@ -14,7 +14,9 @@
  *
  */
 definition(
-    name: 'El-Azan 2.0', namespace: 'husseinmohkhalil', author: 'Hussein Khalil', description: 'this smart app trigger google home speaker or group to call for Azan ', category: 'My Apps', iconUrl: 'https://i.pinimg.com/originals/eb/0f/40/eb0f40923cdaf3abaaf473ca1f15a9ee.png', iconX2Url: 'https://i.pinimg.com/originals/eb/0f/40/eb0f40923cdaf3abaaf473ca1f15a9ee.png', iconX3Url: 'https://i.pinimg.com/originals/eb/0f/40/eb0f40923cdaf3abaaf473ca1f15a9ee.png')
+    name: 'El-Azan 2.0', namespace: 'husseinmohkhalil', author: 'Hussein Khalil', description: 'this smart app trigger google home speaker or group to call for Azan ', category: 'My Apps',
+    iconUrl: 'https://img2.apksum.com/7a/com.worldsalatapp.accurate.prayer/6.3/icon.png',
+    iconX2Url: 'https://img2.apksum.com/7a/com.worldsalatapp.accurate.prayer/6.3/icon.png', iconX3Url: 'https://img2.apksum.com/7a/com.worldsalatapp.accurate.prayer/6.3/icon.png')
 
 preferences {
     section('Fajr') {
@@ -63,41 +65,118 @@ preferences {
 }
 
 def installed() {
-    log.debug "Installed with settings: ${settings}"
+    log.debug "El-Azan 2.0 Installed "
+    //log.debug "with settings: ${settings}"
     initialize()
 }
 
 def updated() {
-    log.debug "Updated with settings: ${settings}"
+    log.debug "El-Azan 2.0 Updated"
+    //log.debug "with settings: ${settings}"
     unsubscribe()
     initialize()
 }
 
 def initialize() {
-    log.info ' The Azan Smartapp Started'
+    log.info ' El-Azan 2.0 Smartapp Started'
     GoAzan()
 }
 
 def GoAzan() {
-     log.info " GoAzan() Starts"
-      try {
-        def nextPrayEvent = GetNextPrayEvent();
 
-        def nextAzanTime = nextPrayEvent.Time
-        log.info " Azan ${nextPrayEvent.Name} is after ${nextAzanTime} s "
+    //NOTE: the logic is in PlayNextAzanOnTime(output) function 
+    CallAzanBridgeApi("nextprayarevent", "PlayNextAzanOnTime");
 
-        runIn(nextAzanTime, "PlayAzan", [data: [nextPrayEvent: nextPrayEvent, TargetDevice: nextPrayEvent.TargetDevices]])
+}
 
-        def nextCalculate = nextAzanTime;
-        runIn(nextCalculate, GoAzan);
-      } catch(e) {
-        log.error "something went wrong in Azan Function: $e"
-        sendPush("Exception in GoAzan Function")
+def PlayNextAzanOnTime(output) {
+    try {
+        log.debug "Starting response parsing on ${output}"
+        def msg = output
+
+        def headerMap = msg.headers // => headers as a Map
+        def body = msg.body // => request body as a string
+        def status = msg.status // => http status code of the response
+        def data = msg.data // => either JSON or XML in response body (whichever is specified by content-type header in response)
+        //log.debug "headers: ${headerMap}, status: ${status}, body: ${body}, data: ${data}"
+
+        //what we need here is data (the json object containing the next azan time)
+        log.debug "API request statusCode : ${status}"
+
+        if (status == 200) {
+
+            def outputJasonData = new groovy.json.JsonOutput().toJson(data)
+            def JsonObject = new groovy.json.JsonSlurper().parseText(outputJasonData)
+            assert JsonObject instanceof List
+
+            def nextAzanObject = JsonObject[0]
+            assert nextAzanObject instanceof Map
+
+            def afterNextAzanObject = JsonObject[1]
+            assert afterNextAzanObject instanceof Map
+            sendPush("El-Azan 2.0: ${nextAzanObject.name} at ${nextAzanObject.time}")
+            log.debug "Azan ${nextAzanObject.name} at ${nextAzanObject.time} is after ${nextAzanObject.remaingSeconds} s"
+
+            def nextPrayEvent;
+            //check first that the next Event is not Kids Iftar
+            if (IsRamadanModeActive && EnableKidsMode) {
+                try {
+                    def KidsIftarUTC = GetPrayerDateTimeInUTC(KidsIftarHour, '00')
+                    def nextKidsIftarInSec = GetSecondsToPrayTime(KidsIftarUTC)
+                    if (nextKidsIftarInSec > 0) {
+                        nextPrayEvent = GetPrayerTimeObject('KidsIftar', nextKidsIftarInSec, KidsIftarVolume, EnableKidsMode, KidsActiveDays);
+                        nextAzanObject.name = "KidsIftar";
+                        sendPush("El-Azan 2.0: KidsIftar is next")
+                    }
+                } catch (e) {
+                    sendPush('Kids Configuration not correct')
+                    log.error 'Kids Configuration not correct'
+                }
+            }
+
+		//Note that the names in the switch case is the spilling from the API not the applications spilling  (Dhuhr vs Zohr) 
+            switch (nextAzanObject.name) {
+            case 'Fajr':
+                nextPrayEvent = GetPrayerTimeObject('Fajr', nextAzanObject.remaingSeconds, FajrVolume, FajrIsActive, FajrActiveDays)
+                break
+
+            case 'Dhuhr':
+                nextPrayEvent = GetPrayerTimeObject('Zohr', nextAzanObject.remaingSeconds, ZoherVolume, ZoherIsActive, ZoherActiveDays)
+                break
+
+            case 'Asr':
+                nextPrayEvent = GetPrayerTimeObject('Asr', nextAzanObject.remaingSeconds, AsrVolume, AsrIsActive, AsrActiveDays)
+                break
+
+            case 'Maghrib':
+                nextPrayEvent = GetPrayerTimeObject('Maghreb', nextAzanObject.remaingSeconds, MaghrebVolume, MaghrebIsActive, MaghrebActiveDays)
+                break
+
+            case 'Isha':
+                nextPrayEvent = GetPrayerTimeObject('Isha', nextAzanObject.remaingSeconds, IsaVolume, IsaIsActive, IsaActiveDays)
+                break
+            }
+
+            def nextAzanTime = nextPrayEvent.Time
+            log.info " Azan ${nextPrayEvent.Name} is after ${nextAzanTime} s "
+
+            runIn(nextAzanTime, "PlayAzan", [data: [nextPrayEvent: nextPrayEvent, TargetDevice: nextPrayEvent.TargetDevices]])
+
+            def nextCalculate = nextAzanTime;
+           runIn(nextCalculate, GoAzan);
+
+        } else {
+            log.debug "Unable to locate device on your network"
+        }
+
+    } catch (e) {
+        log.error "something went wrong in El-Azan 2.0  $e"
+        sendPush("El-Azan 2.0: Exception in GoAzan Function")
         sendPush("$e")
 
         //rerun after 10 min
         runIn(600, GoAzan);
-      }
+    }
 }
 
 def PlayAzan(data) {
@@ -107,7 +186,7 @@ def PlayAzan(data) {
         def shouldPlayAzan = AzanIsEnabledAndActive(prayEvent)
 
         if (shouldPlayAzan) {
-            sendPush("it is ${prayEvent.Name} Azan Time :) ")
+            sendPush("El-Azan 2.0: it is ${prayEvent.Name} Azan Time :) ")
             targetDevices.setLevel(prayEvent.Volume)
 
             def PlayBackUrl = GetPlayBackUrlBySalahName(prayEvent.Name)
@@ -115,7 +194,7 @@ def PlayAzan(data) {
         }
     } catch (e) {
         log.error "something went wrong in playing Azan Function: $e"
-        sendPush('Exception in PlayAzan Function')
+        sendPush('El-Azan 2.0: Exception in PlayAzan Function')
         sendPush("$e")
 
         //rerun after 10 min
@@ -123,139 +202,10 @@ def PlayAzan(data) {
     }
 }
 
-def GetNextPrayEvent() {
-    log.info ' I am in GetNextPrayEvent()'
-    def todatDay = new Date().format('dd') as int
-    def todayDayIndex = todatDay - 1 as int // because the index in the array [in the api] starts with 0  so day 27 for example is in the 26th index
-    def todatMonth = new Date().format('MM') as int
-    def todatYear = new Date().format('yyyy') as int
-    def nextAzanTimeInSeconds
-
-    def params = [
-        uri: "http://api.aladhan.com/v1/calendar?latitude=47.9568123&longitude=7.7496747&method=12&month=${todatMonth}&year=${todatYear}", path: ''
-    ]
-
-    try {
-        httpGet(params) {
-            resp ->
-
-                def outputJasonData = new groovy.json.JsonOutput().toJson(resp.data)
-            def JsonObject = new groovy.json.JsonSlurper().parseText(outputJasonData)
-
-            assert JsonObject instanceof Map
-            assert JsonObject.data instanceof List
-            assert JsonObject.data[todayDayIndex] instanceof Map
-            assert JsonObject.data[todayDayIndex].timings instanceof Map
-
-            //get timings [hh][mm] for each pray
-            def FajrTime = JsonObject.data[todayDayIndex].timings.Fajr.split()[0].split(':')
-            def ZohrTime = JsonObject.data[todayDayIndex].timings.Dhuhr.split()[0].split(':')
-            def AsrTime = JsonObject.data[todayDayIndex].timings.Asr.split()[0].split(':')
-            def MaghrebTime = JsonObject.data[todayDayIndex].timings.Maghrib.split()[0].split(':')
-            def IshaTime = JsonObject.data[todayDayIndex].timings.Isha.split()[0].split(':')
-            def TomorrowFajrTime = GetTomorrowFajr(JsonObject.data)
-
-            log.debug "FajrTime ${FajrTime}"
-            log.debug "ZohrTime ${ZohrTime}"
-            log.debug "AsrTime ${AsrTime}"
-            log.debug "MaghrebTime ${MaghrebTime}"
-            log.debug "IshaTime ${IshaTime}"
-            log.debug "TomorrowFajrTime ${TomorrowFajrTime}"
-
-            // get corresponding UTC for each pray
-            def todayFajrUTC = GetPrayerDateTimeInUTC(FajrTime[0], FajrTime[1])
-            def todayZohrUTC = GetPrayerDateTimeInUTC(ZohrTime[0], ZohrTime[1])
-            def todayAsrUTC = GetPrayerDateTimeInUTC(AsrTime[0], AsrTime[1])
-            def todayMaghrebUTC = GetPrayerDateTimeInUTC(MaghrebTime[0], MaghrebTime[1])
-            def todayIshaUTC = GetPrayerDateTimeInUTC(IshaTime[0], IshaTime[1])
-            def TomorrowFajrUTC = GetPrayerDateTimeInUTC(TomorrowFajrTime[0], TomorrowFajrTime[1], true)
-
-            // get seconds remaining for each pray
-            def todayFajrSec = GetSecondsToPrayTime(todayFajrUTC)
-            def tomorrowFajrSec = GetSecondsToPrayTime(TomorrowFajrUTC)
-
-            def nextZohrInSec = GetSecondsToPrayTime(todayZohrUTC)
-            def nextAsrInSec = GetSecondsToPrayTime(todayAsrUTC)
-            def nextMaghrebInSec = GetSecondsToPrayTime(todayMaghrebUTC)
-            def nextIshaInSec = GetSecondsToPrayTime(todayIshaUTC)
-            def nextFajrSec = todayFajrSec > 0 ? todayFajrSec : tomorrowFajrSec
-
-            if (IsRamadanModeActive) {
-                nextMaghrebInSec = nextMaghrebInSec - 18 //remove the timing for the talking before the Azan it self from file Ramadan_maghreb_complete.mp3
-            }
-
-            // add positive seconds to list and get the minimum value
-            def AllPrayersEvents = []
-
-            if (nextFajrSec > 0) AllPrayersEvents.add(GetPrayerTimeObject('Fajr', nextFajrSec, FajrVolume, FajrIsActive, FajrActiveDays))
-
-            if (nextZohrInSec > 0) AllPrayersEvents.add(GetPrayerTimeObject('Zohr', nextZohrInSec, ZoherVolume, ZoherIsActive, ZoherActiveDays))
-
-            if (nextAsrInSec > 0) AllPrayersEvents.add(GetPrayerTimeObject('Asr', nextAsrInSec, AsrVolume, AsrIsActive, AsrActiveDays))
-
-            if (nextMaghrebInSec > 0) AllPrayersEvents.add(GetPrayerTimeObject('Maghreb', nextMaghrebInSec, MaghrebVolume, MaghrebIsActive, MaghrebActiveDays))
-
-            if (nextIshaInSec > 0) AllPrayersEvents.add(GetPrayerTimeObject('Isha', nextIshaInSec, IsaVolume, IsaIsActive, IsaActiveDays))
-
-            if (IsRamadanModeActive && EnableKidsMode) {
-                try {
-                    def KidsIftarUTC = GetPrayerDateTimeInUTC(KidsIftarHour, '00')
-                    def nextKidsIftarInSec = GetSecondsToPrayTime(KidsIftarUTC)
-                    if (nextKidsIftarInSec > 0) {
-                        AllPrayersEvents.add(GetPrayerTimeObject('KidsIftar', nextKidsIftarInSec, KidsIftarVolume, EnableKidsMode, KidsActiveDays))
-                    }
-                } catch (e) {
-                    sendPush('Kids Configuration not correct')
-                    log.error 'Kids Configuration not correct'
-                }
-            }
-
-            def nextPrayEvent = AllPrayersEvents.min {
-                it.Time
-            }
-
-            //send push notification for Next azan
-            def nextAzanDayTime = ''
-
-            switch (nextPrayEvent.Name) {
-            case 'Fajr':
-                nextAzanDayTime = todayFajrSec > 0 ? FajrTime : TomorrowFajrTime
-                break
-
-            case 'Zohr':
-                nextAzanDayTime = ZohrTime
-                break
-
-            case 'Asr':
-                nextAzanDayTime = AsrTime
-                break
-
-            case 'Maghreb':
-                nextAzanDayTime = MaghrebTime
-                break
-
-            case 'Isha':
-                nextAzanDayTime = IshaTime
-                break
-            }
-
-            sendPush("Next Azan is : ${nextPrayEvent.Name} at ${nextAzanDayTime}")
-
-            return nextPrayEvent
-        }
-    } catch (e) {
-        log.error "something went wrong: $e"
-        log.error 'Apply stupid hack and recall the same method'
-    }
-}
-
 def GetPrayerTimeObject(name, time, volume, isActive, ActiveDays) {
-    def obj = [Name: name, Time: time, Volume: volume, IsActive: isActive, ActiveDays: ActiveDays]
-}
+        log.debug "name:${name} --- time: ${time} --- volume: ${volume} --- isActive: ${isActive} --- ActiveDays: ${ActiveDays}"
 
-def GetKidsTimeAzan() {
-    def todayIshaUTC = GetPrayerDateTimeInUTC(IshaTime[0], IshaTime[1])
-    def nextIshaInSec = GetSecondsToPrayTime(todayIshaUTC)
+    return [Name: name, Time: time, Volume: volume, IsActive: isActive, ActiveDays: ActiveDays]
 }
 
 def GetTargetDeviceByName(name) {
@@ -290,44 +240,6 @@ def GetPlayBackUrlBySalahName(name) {
     if (name == 'Isha') return 'http://192.168.178.118:1000/azan/azan_cairo1.mp3'
 
     if (name == 'KidsIftar') return 'http://192.168.178.118:1000/azan/madfa3_only.mp3'
-}
-
-def GetTomorrowFajr(todayData) {
-    def todatMonth = new Date().format('MM') as int
-    def tomorrowDay = new Date().plus(1).format('dd') as int
-    def tomorrowDayIndex = tomorrowDay - 1 as int // because the index in the array [in the api] starts with 0  so day 27 for example is in the 26th index
-
-    def tomorrowMonth = new Date().plus(1).format('MM') as int
-    def tomorrowYear = new Date().plus(1).format('yyyy') as int
-
-    if (todatMonth == tomorrowMonth) {
-        def tomorrowFajrTime = todayData[tomorrowDayIndex].timings.Fajr.split()[0].split(':')
-
-        return tomorrowFajrTime
-    } else {
-        def params = [
-            uri: "http://api.aladhan.com/v1/calendar?latitude=47.9568123&longitude=7.7496747&method=12&month=${TomorrowMonth}&year=${tomorrowYear}", path: ''
-        ]
-
-        try {
-            httpGet(params) {
-                resp ->
-
-                    def outputJasonData = new groovy.json.JsonOutput().toJson(resp.data)
-                def JsonObject = new groovy.json.JsonSlurper().parseText(outputJasonData)
-
-                assert JsonObject instanceof Map
-                assert JsonObject.data instanceof List
-                assert JsonObject.data[tomorrowDayIndex] instanceof Map
-                assert JsonObject.data[tomorrowDayIndex].timings instanceof Map
-
-                def tomorrowFajrTime = JsonObject.data[tomorrowDayIndex].timings.Fajr.split()[0].split(':')
-                return tomorrowFajrTime
-            }
-        } catch (e) {
-            log.error "something went wrong: $e"
-        }
-    }
 }
 
 def GetPrayerDateTimeInUTC(prayHour, prayMinutes, isTomorrowPray = false) {
@@ -366,10 +278,10 @@ def AzanIsEnabledAndActive(prayEvent) {
 }
 
 def CallAzanBridgeApi(endpoint, callBackMethod) {
-    def targetPath = endpoint == null ? "/prayerevent": "/prayerevent/" + endpoint;
-     log.debug targetPath
+    def targetPath = endpoint == null ? "/prayerevent" : "/prayerevent/" + endpoint;
+    log.debug targetPath
     def httpRequest = [
-        path: "/prayerevent",
+        path: targetPath,
         method: "GET",
         headers: [
             HOST: "192.168.178.118:2000",
@@ -382,24 +294,5 @@ def CallAzanBridgeApi(endpoint, callBackMethod) {
         return sendHubCommand(hubAction)
     } catch (Exception e) {
         log.debug "Hit Exception $e on $hubAction"
-    }
-}
-
-
-def CallAzanBridgeApiCallBackParser(output) {
-    log.debug "Starting response parsing on ${output}"
-    def msg = output
-
-    def headerMap = msg.headers // => headers as a Map
-    def body = msg.body // => request body as a string
-    def status = msg.status // => http status code of the response
-    def data = msg.data // => either JSON or XML in response body (whichever is specified by content-type header in response)
-
-    log.debug "headers: ${headerMap}, status: ${status}, body: ${body}, data: ${data}"
-
-    if (status == 200) {
-        log.debug "200"
-    } else {
-        log.debug "Unable to locate device on your network"
     }
 }
