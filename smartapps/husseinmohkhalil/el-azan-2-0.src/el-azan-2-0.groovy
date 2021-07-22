@@ -112,8 +112,6 @@ def PlayNextAzanOnTime(output) {
             def nextAzanObject = JsonObject[0]
             assert nextAzanObject instanceof Map
 
-            def afterNextAzanObject = JsonObject[1]
-            assert afterNextAzanObject instanceof Map
             sendPush("El-Azan 2.0: ${nextAzanObject.name} at ${nextAzanObject.time}")
             log.debug "Azan ${nextAzanObject.name} at ${nextAzanObject.time} is after ${nextAzanObject.remaingSeconds} s"
 
