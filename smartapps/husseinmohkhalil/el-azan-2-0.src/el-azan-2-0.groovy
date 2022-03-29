@@ -104,17 +104,26 @@ def PlayNextAzanOnTime(output) {
         log.debug "API request statusCode : ${status}"
 
         if (status == 200) {
+log.debug "i am at 1"
+log.debug "data: " + data
 
             def outputJasonData = new groovy.json.JsonOutput().toJson(data)
+log.debug "outputJasonData: " + outputJasonData
+
             def JsonObject = new groovy.json.JsonSlurper().parseText(outputJasonData)
             assert JsonObject instanceof List
+log.debug "i am at 2"
+log.debug JsonObject[0]
+log.debug "i am at 3.0"
 
             def nextAzanObject = JsonObject[0]
             assert nextAzanObject instanceof Map
+            log.debug "i am at 3"
+            
 
             sendPush("El-Azan 2.0: ${nextAzanObject.name} at ${nextAzanObject.time}")
             log.debug "Azan ${nextAzanObject.name} at ${nextAzanObject.time} is after ${nextAzanObject.remaingSeconds} s"
-
+log.debug "i am at 4"
             def nextPrayEvent;
             //check first that the next Event is not Kids Iftar
             if (IsRamadanModeActive && EnableKidsMode) {
